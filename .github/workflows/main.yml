@@ -1,0 +1,52 @@
+name: 하나은행 유튜브 데이터 수집
+
+on:
+  schedule:
+    - cron: "0 0 * * *"
+  workflow_dispatch:
+    inputs:
+      max_videos:
+        description: "수집할 최대 영상 수"
+        required: false
+        default: "100"
+        type: string
+
+jobs:
+  collect:
+    name: 데이터 수집 & 커밋
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Python 설치
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 유튜브 데이터 수집
+        env:
+          MAX_VIDEOS: ${{ github.event.inputs.max_videos || '100' }}
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+        run: python scraper.py
+
+      - name: 결과 커밋 & 푸시
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/
+          git diff --cached --quiet && echo "변경 없음" || git commit -m "데이터 업데이트: $(date +'%Y-%m-%d %H:%M UTC')"
+          git pull --rebase origin main
+          git push
+
+      - name: 아티팩트 업로드
+        uses: actions/upload-artifact@v4
+        with:
+          name: hana-youtube-data-${{ github.run_number }}
+          path: |
+            data/latest.json
+            data/latest.csv
+          retention-days: 30
